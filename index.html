@@ -1,0 +1,790 @@
+<title>ડેપ્થ માઇક્રોમીટર સિમ્યુલેટર</title>
+<meta name="description" content="ITI તાલીમાર્થીઓ માટે ગુજરાતી ડેપ્થ માઇક્રોમીટર સિમ્યુલેટર: ઊલટો સ્કેલ, થીમ્બલ ખેંચીને ફેરવો, એક્સટેન્શન રોડ, રેચેટ, અસલી જોબની ઊંડાઈ માપો.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rasa:wght@500;700&family=Mukta+Vaani:wght@400;500;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: phone-first instrument bench — big draggable thimble/sleeve view + whole-instrument view, readout, slider + fine buttons, mode cards */
+:root{
+  --bg:#E8ECEF; --surface:#FFFFFF; --sunk:#F2F5F7; --ink:#14202A; --muted:#596875; --line:#D3DBE1;
+  --accent:#0B7A75; --accent2:#075E5A; --onaccent:#FFFFFF;
+  --mm:#1E5BD8; --half:#D99A00; --th:#D7262E; --ok:#13915A; --bad:#D7262E; --warnbg:#FFF4D6; --warnink:#6B4A00;
+  --job:#B7C1C9; --hatch:#7F8B95; --air:#F2F5F7; --plate:#3A4148; --grid:rgba(20,32,42,.05);
+  --f-disp:"Rasa","Noto Serif Gujarati",Georgia,serif;
+  --f-body:"Mukta Vaani","Noto Sans Gujarati",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D1216; --surface:#151D23; --sunk:#10171C; --ink:#E4EBF0; --muted:#93A1AD; --line:#25313A;
+  --accent:#2BB3AA; --accent2:#1C8C85; --onaccent:#05201E;
+  --mm:#6B95FF; --half:#F2C230; --th:#FF5A5F; --ok:#35C47F; --bad:#FF5A5F; --warnbg:#3A2E0E; --warnink:#FFE19A;
+  --job:#46525C; --hatch:#66737E; --air:#10171C; --plate:#05080A; --grid:rgba(255,255,255,.04); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D1216; --surface:#151D23; --sunk:#10171C; --ink:#E4EBF0; --muted:#93A1AD; --line:#25313A;
+  --accent:#2BB3AA; --accent2:#1C8C85; --onaccent:#05201E;
+  --mm:#6B95FF; --half:#F2C230; --th:#FF5A5F; --ok:#35C47F; --bad:#FF5A5F; --warnbg:#3A2E0E; --warnink:#FFE19A;
+  --job:#46525C; --hatch:#66737E; --air:#10171C; --plate:#05080A; --grid:rgba(255,255,255,.04); color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.55;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+.wrap{max-width:980px;margin:0 auto;padding-inline:16px;padding-block:10px 40px;display:grid;gap:12px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:6px 0}
+.brand h1{font-family:var(--f-disp);font-weight:700;font-size:clamp(1.55rem,4.6vw,2.2rem);line-height:1.05;margin:0;text-wrap:balance;letter-spacing:.2px}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:.86rem}
+.brand p b{font-family:var(--f-mono);font-weight:700;color:var(--accent)}
+.iconbtn{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);width:44px;height:44px;border-radius:12px;font-size:1.15rem;cursor:pointer}
+/* stage */
+.stage{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr);gap:10px}
+.view,.lens{position:relative;height:clamp(390px,62vh,620px);border-radius:16px;background:var(--sunk);border:1px solid var(--line);overflow:hidden}
+.view canvas,.lens canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.status{margin-top:-4px;z-index:3;font-size:.82rem;font-weight:700;padding:7px 10px;border-radius:10px;background:var(--surface);border:1px solid var(--line);color:var(--ink);text-align:center;line-height:1.35}
+.status.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.status.warn{background:var(--warnbg);border-color:var(--half);color:var(--warnink)}
+.status.bad{background:var(--bad);border-color:var(--bad);color:#fff}
+.lens canvas{cursor:grab}.lens canvas.drag{cursor:grabbing}
+.dragtip{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:2;pointer-events:none;background:var(--ink);color:var(--bg);font-size:.76rem;font-weight:800;padding:4px 11px;border-radius:99px;white-space:nowrap;opacity:.88;transition:opacity .4s}
+.dragtip.gone{opacity:0}
+.vcap{position:absolute;left:0;right:0;top:0;z-index:2;font-size:.72rem;font-weight:800;color:var(--muted);text-align:center;padding-top:6px;letter-spacing:.4px}
+.slrow{display:grid;gap:4px}
+.slrow input{width:100%;accent-color:var(--accent);height:30px}
+.slrow small{font-size:.74rem;color:var(--muted);font-weight:700;text-align:center}
+.fine4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.lc{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.lc div{background:var(--sunk);border-radius:10px;padding:8px;text-align:center;font-size:.8rem;color:var(--muted);font-weight:700}
+.lc b{display:block;font-family:var(--f-mono);font-size:1.1rem;color:var(--ink)}
+.lenscap{position:absolute;left:0;right:0;top:0;z-index:2;font-size:.72rem;font-weight:800;color:var(--muted);text-align:center;padding-top:6px;letter-spacing:.4px}
+/* readout */
+.readout{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:10px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;justify-content:center}
+.ro{display:grid;justify-items:center;min-width:58px}
+.ro b{font-family:var(--f-mono);font-weight:700;font-size:1.15rem;font-variant-numeric:tabular-nums}
+.ro span{font-size:.7rem;color:var(--muted);font-weight:700}
+.ro.r b{color:var(--ink)} .ro.m b{color:var(--mm)} .ro.h b{color:var(--half)} .ro.t b{color:var(--th)}
+.op{color:var(--muted);font-weight:800}
+.ro.tot{background:var(--sunk);border:1px solid var(--line);border-radius:12px;padding:3px 12px}
+.ro.tot b{font-size:1.45rem;color:var(--accent)}
+.readout.masked .ro b{filter:blur(7px);opacity:.6}
+.maskmsg{width:100%;text-align:center;font-size:.78rem;color:var(--muted);font-weight:700}
+/* controls */
+.controls{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px;display:grid;gap:12px}
+.rodrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rodrow>label{font-weight:800;font-size:.86rem}
+.rods{display:flex;gap:6px;flex-wrap:wrap}
+.rods button{font-family:var(--f-mono);font-weight:700;font-size:.82rem;border:1.5px solid var(--line);background:var(--sunk);color:var(--ink);padding:6px 10px;border-radius:10px;cursor:pointer}
+.rods button.on{border-color:var(--accent);background:var(--accent);color:var(--onaccent)}
+.fine4 button{font-family:var(--f-mono);font-weight:700;border:1.5px solid var(--line);background:var(--sunk);color:var(--ink);padding:10px 4px;border-radius:12px;cursor:pointer;font-size:.92rem;touch-action:manipulation}
+.fine4 button small{display:block;font-family:var(--f-body);font-size:.66rem;color:var(--muted);font-weight:700}
+.ratchet{border:0;background:var(--accent);color:var(--onaccent);font:inherit;font-weight:800;font-size:1rem;padding:12px;border-radius:12px;cursor:pointer;box-shadow:0 3px 0 var(--accent2)}
+.ratchet:active{transform:translateY(2px);box-shadow:none}
+.toggles{display:flex;gap:8px;flex-wrap:wrap}
+.tg{font:inherit;font-weight:700;font-size:.8rem;border:1.5px solid var(--line);background:var(--sunk);color:var(--muted);padding:5px 11px;border-radius:99px;cursor:pointer}
+.tg.on{border-color:var(--accent);color:var(--accent);background:var(--surface)}
+/* modes */
+.modes{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.modes button{font:inherit;font-weight:800;font-size:.86rem;border:1.5px solid var(--line);background:var(--surface);color:var(--muted);padding:9px 4px;border-radius:12px;cursor:pointer;line-height:1.25}
+.modes button.on{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;gap:10px}
+.panel h2{font-family:var(--f-disp);font-size:1.35rem;margin:0;line-height:1.2;text-wrap:balance}
+.panel p{margin:0}
+.callout{background:var(--warnbg);color:var(--warnink);border-radius:12px;padding:10px 12px;font-size:.92rem;border:1px solid var(--half)}
+.steps{margin:0;padding:0;list-style:none;display:grid;gap:6px;counter-reset:s}
+.steps li{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;background:var(--sunk);border-radius:10px;padding:7px 9px;font-size:.92rem}
+.steps li::before{counter-increment:s;content:counter(s);width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.8rem;background:var(--surface);border:1.5px solid var(--line)}
+.steps li.sum::before{content:"=";border-color:var(--accent);color:var(--accent)}
+.steps li b{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.c-m{color:var(--mm)} .c-h{color:var(--half)} .c-t{color:var(--th)} .c-a{color:var(--accent)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{font:inherit;font-weight:700;font-size:.82rem;border:1.5px solid var(--line);background:var(--sunk);color:var(--ink);padding:6px 11px;border-radius:99px;cursor:pointer}
+.chips button.on{border-color:var(--accent);background:var(--accent);color:var(--onaccent)}
+.ansrow{display:flex;gap:8px;flex-wrap:wrap}
+.ansrow input{flex:1 1 140px;min-width:0;font-family:var(--f-mono);font-size:1.15rem;font-weight:700;padding:10px 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--sunk);color:var(--ink)}
+.btn{font:inherit;font-weight:800;border:0;border-radius:12px;padding:11px 16px;cursor:pointer;background:var(--ink);color:var(--bg)}
+.btn.alt{background:var(--sunk);color:var(--ink);border:1.5px solid var(--line)}
+.btn.acc{background:var(--accent);color:var(--onaccent)}
+.result{border-radius:12px;padding:10px 12px;font-weight:700;font-size:.93rem}
+.result.ok{background:color-mix(in srgb,var(--ok) 14%,var(--surface));border:1.5px solid var(--ok)}
+.result.bad{background:color-mix(in srgb,var(--bad) 12%,var(--surface));border:1.5px solid var(--bad)}
+.score{display:flex;gap:14px;flex-wrap:wrap;font-size:.84rem;font-weight:800;color:var(--muted)}
+.score b{font-family:var(--f-mono);color:var(--ink)}
+.target{font-family:var(--f-mono);font-size:2rem;font-weight:700;color:var(--accent);line-height:1.1}
+.parts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.parts div{background:var(--sunk);border-radius:10px;padding:8px 10px;font-size:.88rem}
+.parts b{display:block}
+.tips{margin:0;padding-left:20px;font-size:.92rem;display:grid;gap:3px}
+.th-toc{display:flex;gap:6px;flex-wrap:wrap}
+.th-toc button{font:inherit;font-size:.78rem;font-weight:700;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:4px 10px;border-radius:99px;cursor:pointer}
+.th{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:10px;scroll-margin-top:12px}
+.th h3{font-family:var(--f-disp);font-size:1.25rem;margin:0;line-height:1.2;display:flex;gap:10px;align-items:baseline;text-wrap:balance}
+.th h3 .n{font-family:var(--f-mono);font-size:.85rem;color:var(--accent);flex:0 0 auto}
+.th p{max-width:68ch}
+.key{border-left:4px solid var(--accent);background:var(--sunk);border-radius:0 10px 10px 0;padding:8px 12px;font-size:.93rem}
+.key b:first-child{display:block;font-size:.76rem;letter-spacing:.4px;color:var(--accent)}
+.formula{font-family:var(--f-mono);font-weight:700;background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 12px;font-size:.95rem;line-height:1.6;overflow-x:auto}
+.formula .c-m,.formula .c-h,.formula .c-t{filter:brightness(1.35)}
+.tbl{overflow-x:auto}
+.tbl table{border-collapse:collapse;width:100%;font-size:.88rem;min-width:300px}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.tbl th{font-size:.78rem;color:var(--muted);font-weight:800}
+.tbl td.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.fig{display:grid;gap:6px;align-content:start}
+.fig canvas{width:100%;height:250px;border-radius:12px;border:1px solid var(--line);display:block;background:var(--sunk)}
+.fig figcaption,.fig .cap{font-size:.84rem;color:var(--muted);font-weight:600}
+.fig .cap b{font-family:var(--f-mono);color:var(--ink)}
+.screwbox{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:center}
+.screwbox canvas{width:100%;height:290px;border-radius:12px;border:1px solid var(--line);display:block;background:var(--sunk);touch-action:pan-y}
+.screwout{display:grid;gap:8px}
+.screwout input{width:100%;accent-color:var(--accent)}
+.bigout{font-family:var(--f-mono);font-size:1.5rem;font-weight:700;color:var(--accent)}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.cmp div{border:1px solid var(--line);border-radius:12px;padding:10px;font-size:.9rem}
+.cmp div.hl{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.cmp b:first-child{display:block;font-family:var(--f-disp);font-size:1.05rem;margin-bottom:2px}
+.err{display:grid;gap:6px}
+.err div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;background:var(--sunk);border-radius:10px;padding:8px 10px;font-size:.88rem}
+.err div span:first-child{font-weight:700}
+.err div span:last-child{color:var(--ok);font-weight:700}
+.sop{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.93rem}
+.qz{display:grid;gap:10px}
+.qq{background:var(--sunk);border-radius:12px;padding:10px 12px;display:grid;gap:8px}
+.qq p{font-weight:700}
+.qq .ops{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px}
+.qq .ops button{font:inherit;font-weight:700;font-size:.88rem;text-align:left;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 10px;border-radius:10px;cursor:pointer}
+.qq .ops button.r{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,var(--surface))}
+.qq .ops button.w{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,var(--surface))}
+.qq .why{font-size:.86rem;color:var(--muted)}
+@media (max-width:620px){.screwbox{grid-template-columns:1fr}.err div{grid-template-columns:1fr}}
+.toast{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translate(-50%,160%);z-index:50;max-width:min(92vw,520px);background:var(--ink);color:var(--bg);font-weight:700;font-size:.9rem;padding:10px 14px;border-radius:12px;transition:transform .3s cubic-bezier(.2,1.4,.4,1);box-shadow:0 10px 24px rgba(0,0,0,.25)}
+.toast.on{transform:translate(-50%,0)}
+.note{font-size:.8rem;color:var(--muted)}
+footer{text-align:center;font-size:.82rem;color:var(--muted)}
+footer a{color:var(--accent);font-weight:800}
+.visits{display:inline-block;margin-top:6px}
+.hide{display:none!important}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (max-width:620px){
+  .stage{grid-template-columns:minmax(0,1.3fr) minmax(0,.7fr);gap:8px}
+  .view,.lens{height:clamp(380px,60vh,540px)}
+  .modes button{font-size:.8rem}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>ડેપ્થ માઇક્રોમીટર</h1>
+      <p>લઘુતમ માપ <b>0.01 mm</b> · રેન્જ <b>0–100 mm</b> · થીમ્બલ ફેરવો, ઊલટો સ્કેલ વાંચતા શીખો</p>
+    </div>
+    <button class="iconbtn" id="snd" aria-label="અવાજ ચાલુ કે બંધ કરો">🔊</button>
+  </header>
+
+  <div class="stage">
+    <div class="lens" id="lensBox">
+      <div class="lenscap">મોટું દૃશ્ય ×8 · થીમ્બલ ખેંચીને ફેરવો</div>
+      <canvas id="zoom" aria-label="સ્લીવ અને થીમ્બલનું મોટું દૃશ્ય. ખેંચીને થીમ્બલ ફેરવો"></canvas>
+      <div class="dragtip" id="dragtip">👆 થીમ્બલ નીચે/ડાબે ખેંચો</div>
+    </div>
+    <div class="view" id="view">
+      <div class="vcap">આખું સાધન</div>
+      <canvas id="v2d" aria-label="ડેપ્થ માઇક્રોમીટરનું આખું દૃશ્ય"></canvas>
+    </div>
+  </div>
+  <div class="status" id="status"></div>
+
+  <section class="readout" id="readout" aria-live="polite">
+    <div class="ro r"><b id="oR">0</b><span>રોડ</span></div><span class="op">+</span>
+    <div class="ro m"><b id="oM">0</b><span>સ્લીવ (mm)</span></div><span class="op">+</span>
+    <div class="ro h"><b id="oH">0.00</b><span>અડધી લાઇન</span></div><span class="op">+</span>
+    <div class="ro t"><b id="oT">0×0.01</b><span>થીમ્બલ</span></div><span class="op">=</span>
+    <div class="ro tot"><b id="oTot">0.00</b><span>ઊંડાઈ (mm)</span></div>
+    <div class="maskmsg hide" id="maskmsg">વાંચન છુપાયેલું છે. મોટા દૃશ્યમાં જોઈને જાતે વાંચો 👀</div>
+  </section>
+
+  <section class="controls">
+    <div class="rodrow"><label>એક્સટેન્શન રોડ</label>
+      <div class="rods" id="rods"></div>
+    </div>
+    <div class="slrow"><input type="range" id="slider" min="0" max="2500" step="1" value="0" aria-label="ઝડપી ગોઠવણ"><small>સ્લાઇડરથી ઝડપી, બટનથી ચોક્કસ ગોઠવણ કરો</small></div>
+    <div class="fine4"><button data-d="-50">−0.50<small>અડધો આંટો</small></button><button data-d="-1">−0.01<small>એક કાપો</small></button><button data-d="1">+0.01<small>એક કાપો</small></button><button data-d="50">+0.50<small>અડધો આંટો</small></button></div>
+    <button class="ratchet" id="ratchet">⟳ રેચેટ ફેરવો (ટક-ટક-ટક)</button>
+    <div class="toggles">
+      <button class="tg on" id="tLabels">🏷 ભાગનાં નામ</button>
+      <button class="tg" id="tXray">🩻 એક્સ-રે થીમ્બલ</button>
+      <button class="tg" id="tZero">↺ શૂન્ય પર લાવો</button>
+    </div>
+  </section>
+
+  <nav class="modes" aria-label="મોડ">
+    <button data-m="learn" class="on">🎓<br>શીખો</button>
+    <button data-m="measure">🔧<br>જોબ માપો</button>
+    <button data-m="read">📖<br>રીડિંગ લો</button>
+    <button data-m="set">🎯<br>સેટ કરો</button>
+    <button data-m="theory">📘<br>થિયરી</button>
+  </nav>
+
+  <section class="panel" id="panel"></section>
+
+  <footer>
+    બીજા સિમ્યુલેટર: <a href="https://ashish119055.github.io/Micrometer/">માઇક્રોમીટર</a> ·
+    <a href="https://ashish119055.github.io/Vernier-Caliper-Simulator/">વર્નિયર કેલિપર</a> ·
+    <a href="https://ashish119055.github.io/Digital-Multimeter-Simulator/">મલ્ટિમીટર</a><br>
+    MCQ: <a href="https://ashish119055.github.io/GSRTC-HELPER-BHARTI-WCS-MCQ/">વર્કશોપ કેલ્ક્યુલેશન</a> ·
+    <a href="https://ashish119055.github.io/GSRTC-HELPER-BHARTI/">એન્જિન</a>
+    <div style="margin-top:6px">Mechanic Diesel · Government ITI Maninagar</div>
+    <div class="visits hide" id="visits">👀 કુલ મુલાકાત: <b id="vCount">0</b><span id="vTodayWrap" class="hide"> · આજે: <b id="vToday">0</b></span></div>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const RODS=[0,25,50,75];
+const JOBS=[
+  {id:"step",n:"સ્ટેપ બ્લોક",t:"step",min:6,max:22},
+  {id:"slot",n:"ખાંચો (સ્લોટ)",t:"slot",min:3,max:15},
+  {id:"hole",n:"બ્લાઇન્ડ હોલ",t:"hole",min:10,max:24},
+  {id:"bowl",n:"ડીઝલ પિસ્ટન બાઉલ",t:"bowl",min:10,max:20},
+  {id:"house",n:"બેરિંગ હાઉસિંગ",t:"cbore",min:27,max:48},
+  {id:"deep",n:"ઊંડું ઓઇલ હોલ",t:"hole",min:52,max:74}
+];
+const KEY="depth_mic_v1";
+const S={tries:0,mode:"learn",rod:0,X:0,labels:true,xray:false,hint:false,revealed:false,job:0,depth:12.46,target:null,score:0,streak:0,best:0,mute:false};
+try{const o=JSON.parse(localStorage.getItem(KEY)||"{}");if(o.best)S.best=o.best;if(o.mute)S.mute=true;}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({best:S.best,mute:S.mute}));}catch(e){}};
+
+/* ---------- sound ---------- */
+let AC=null,MG=null;
+function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();const c=AC.createDynamicsCompressor();c.threshold.value=-12;c.ratio.value=4;MG=AC.createGain();MG.gain.value=1;MG.connect(c);c.connect(AC.destination);}catch(e){}}if(AC&&AC.state==="suspended")AC.resume();return AC;}
+function tone(f,t0,d,type,v,f2){const a=ac();if(!a||S.mute)return;const o=a.createOscillator(),g=a.createGain(),t=a.currentTime+t0;o.type=type||"sine";o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v||.3,t+.005);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(MG);o.start(t);o.stop(t+d+.05);}
+function noise(t0,d,v,freq){const a=ac();if(!a||S.mute)return;const n=Math.max(1,Math.floor(a.sampleRate*d)),b=a.createBuffer(1,n,a.sampleRate),ch=b.getChannelData(0);for(let i=0;i<n;i++)ch[i]=(Math.random()*2-1)*Math.pow(1-i/n,3);const s=a.createBufferSource(),g=a.createGain(),f=a.createBiquadFilter();f.type="bandpass";f.frequency.value=freq||3200;f.Q.value=1.4;s.buffer=b;g.gain.value=v||.4;s.connect(f);f.connect(g);g.connect(MG);s.start(a.currentTime+t0);}
+let lastTick=0;
+const SFX={
+  tick(){const n=performance.now();if(n-lastTick<22)return;lastTick=n;noise(0,.014,.45,4200);},
+  thunk(){tone(150,0,.14,"sine",.5,90);noise(0,.05,.35,900);},
+  ratchet(){[0,.1,.2].forEach(t=>{noise(t,.022,.9,5200);tone(2400,t,.02,"square",.12);});},
+  ok(){tone(660,0,.13,"triangle",.45);tone(990,.1,.18,"triangle",.45);tone(1320,.22,.28,"sine",.4);},
+  bad(){tone(180,0,.22,"square",.25,120);tone(140,.18,.26,"square",.22,90);},
+  tap(){noise(0,.02,.3,2600);},
+  win(){[523,659,784,1046,1318].forEach((f,i)=>tone(f,i*.09,.22,"triangle",.4));}
+};
+function vib(p){if(navigator.vibrate)try{navigator.vibrate(p);}catch(e){}}
+function setSnd(){$("snd").textContent=S.mute?"🔇":"🔊";}
+$("snd").onclick=()=>{S.mute=!S.mute;save();setSnd();SFX.tap();};
+
+/* ---------- toast ---------- */
+let tH=null;function toast(t){const e=$("toast");e.textContent=t;e.classList.add("on");clearTimeout(tH);tH=setTimeout(()=>e.classList.remove("on"),2600);}
+
+/* ---------- model ---------- */
+const rodStart=()=>RODS[S.rod];
+const LM=()=>S.mode==="learn"||S.mode==="theory";
+function curD(){return (LM()||S.mode==="measure")?S.depth:rodStart()+29;}
+function maxX(){return Math.min(2500,Math.round(curD()*100)-rodStart()*100);}
+function hiX(){return Math.max(0,maxX());}
+function effX(){return Math.min(S.X,hiX());}
+function lift(){const m=maxX();return m<0?-m/100:0;}
+function contact(){const m=maxX();return m>=0&&m<=2500&&effX()===m;}
+function parts(X){const msr=Math.floor(X/100),half=(Math.floor(X/50)%2)*.5,t=X%50;return {msr,half,t};}
+const total=()=>rodStart()+effX()/100;
+const f2=v=>v.toFixed(2);
+function newDepth(j){return Math.round((j.min+Math.random()*(j.max-j.min))*100)/100;}
+
+/* ---------- step / interaction ---------- */
+let lastForce=0;
+function setX(v,via){
+  if(S.mode==="read"&&via!=="sys"){toast("📖 રીડિંગ લો મોડમાં થીમ્બલ લૉક છે. ફક્ત વાંચવાનું છે!");req();return;}
+  const hi=hiX(),wasC=contact();let nv=Math.round(v);
+  if(nv>hi){ if(S.X>=hi&&maxX()>=0&&maxX()<=2500&&via==="knob"){const n=performance.now();if(n-lastForce>2500){lastForce=n;toast("✋ થીમ્બલથી જોર ન કરો! છેલ્લે રેચેટથી જ દબાણ આપો.");vib(60);}} nv=hi; }
+  if(nv<0)nv=0;
+  if(nv!==S.X){S.X=nv;if(via!=="sys")SFX.tick();}
+  if(!wasC&&contact()&&via!=="sys"){SFX.thunk();vib(35);}
+  if(via!=="sys"&&(S.mode==="measure"||S.mode==="set"||S.mode==="read"))S.revealed=false;
+  req();
+}
+function step(n,via){setX(effX()+n,via);}
+
+/* big view drag (like micrometer) */
+const zc=$("zoom");let zDrag=null,LZ={pd:8};
+zc.addEventListener("pointerdown",e=>{ac();if(S.mode==="read"){toast("📖 રીડિંગ લો મોડમાં થીમ્બલ લૉક છે. ફક્ત વાંચવાનું છે!");return;}zDrag={x:e.clientX,y:e.clientY,acc:0};zc.setPointerCapture(e.pointerId);zc.classList.add("drag");$("dragtip").classList.add("gone");});
+zc.addEventListener("pointermove",e=>{if(!zDrag)return;const dx=e.clientX-zDrag.x,dy=e.clientY-zDrag.y;zDrag.x=e.clientX;zDrag.y=e.clientY;zDrag.acc+=(-dx+dy);const n=Math.trunc(zDrag.acc/LZ.pd);if(n){zDrag.acc-=n*LZ.pd;step(n,"knob");}});
+const zEnd=()=>{zDrag=null;zc.classList.remove("drag");};zc.addEventListener("pointerup",zEnd);zc.addEventListener("pointercancel",zEnd);
+zc.addEventListener("wheel",e=>{e.preventDefault();ac();step(e.deltaY>0?1:-1,"knob");},{passive:false});
+zc.tabIndex=0;zc.addEventListener("keydown",e=>{const k={ArrowDown:1,ArrowLeft:1,ArrowUp:-1,ArrowRight:-1,PageDown:50,PageUp:-50}[e.key];if(k){step(k,"knob");e.preventDefault();}});
+const sl=$("slider");sl.addEventListener("input",()=>{ac();setX(+sl.value,"knob");});
+document.querySelectorAll(".fine4 button").forEach(b=>{let iv=null,to=null;const d=+b.dataset.d;
+  const go=()=>step(d,"knob");
+  b.addEventListener("pointerdown",e=>{ac();go();to=setTimeout(()=>{iv=setInterval(go,d%50===0?220:55);},380);});
+  const stop=()=>{clearTimeout(to);clearInterval(iv);};["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,stop));});
+/* ratchet */
+let rAnim=null;
+$("ratchet").onclick=()=>{ac();
+  if(S.mode==="read"){toast("📖 રીડિંગ લો મોડમાં થીમ્બલ લૉક છે.");return;}
+  if(maxX()<0){SFX.bad();toast("⚠️ રોડ લાંબો છે, બેઝ જોબ પર બેસતો નથી. નાનો રોડ પસંદ કરો.");return;}
+  const hi=hiX();if(effX()>=hi){if(contact()){SFX.ratchet();vib([12,70,12,70,12]);toast("ટક-ટક-ટક ✅ યોગ્ય દબાણ. હવે વાંચો.");}else toast("રોડ ટૂંકો પડે છે. મોટો રોડ પસંદ કરો.");return;}
+  cancelAnimationFrame(rAnim);let last=0;
+  const run=ts=>{if(ts-last>14){last=ts;const rem=hi-effX();const sp=rem>300?18:rem>60?6:2;setX(effX()+Math.min(sp,rem),"ratchet");}
+    if(effX()<hi)rAnim=requestAnimationFrame(run);else if(contact()){SFX.ratchet();vib([12,70,12,70,12]);toast("ટક-ટક-ટક ✅ રોડ તળિયે બરાબર અડ્યો.");}};
+  rAnim=requestAnimationFrame(run);};
+/* rods */
+function buildRods(){$("rods").innerHTML=RODS.map((r,i)=>`<button data-i="${i}" class="${i===S.rod?"on":""}">${r}–${r+25}</button>`).join("");
+  $("rods").querySelectorAll("button").forEach(b=>b.onclick=()=>{S.rod=+b.dataset.i;S.X=0;SFX.tap();buildRods();S.revealed=false;toast(`🔧 ${RODS[S.rod]}–${RODS[S.rod]+25} mm રોડ લગાવ્યો. લૉક નટ કસો અને થીમ્બલ શૂન્ય પર છે.`);req();});}
+/* toggles */
+$("tLabels").onclick=()=>{S.labels=!S.labels;$("tLabels").classList.toggle("on",S.labels);SFX.tap();req();};
+$("tXray").onclick=()=>{S.xray=!S.xray;$("tXray").classList.toggle("on",S.xray);SFX.tap();req();};
+$("tZero").onclick=()=>{if(S.mode==="read")return toast("📖 રીડિંગ લો મોડમાં થીમ્બલ લૉક છે.");cancelAnimationFrame(rAnim);S.X=0;SFX.tap();req();};
+
+/* ---------- canvas helpers ---------- */
+let TK={};
+function tokens(){const cs=getComputedStyle(document.documentElement);["--sunk","--surface","--ink","--muted","--line","--accent","--mm","--half","--th","--ok","--bad","--job","--hatch","--air","--plate","--grid"].forEach(k=>TK[k]=cs.getPropertyValue(k).trim());}
+function fit(c){const r=c.getBoundingClientRect(),d=Math.min(window.devicePixelRatio||1,2.5);const W=Math.max(1,Math.round(r.width*d)),H=Math.max(1,Math.round(r.height*d));if(c.width!==W||c.height!==H){c.width=W;c.height=H;}const ctx=c.getContext("2d");ctx.setTransform(d,0,0,d,0,0);return {w:r.width,h:r.height,ctx};}
+function steelH(ctx,x0,x1,dark){const g=ctx.createLinearGradient(x0,0,x1,0);if(dark){g.addColorStop(0,"#5E6A73");g.addColorStop(.35,"#AEB8C0");g.addColorStop(.5,"#C8D0D6");g.addColorStop(1,"#4C565E");}else{g.addColorStop(0,"#8A959E");g.addColorStop(.28,"#E7ECEF");g.addColorStop(.45,"#FBFCFD");g.addColorStop(.75,"#C2CAD0");g.addColorStop(1,"#77828B");}return g;}
+function steelV(ctx,y0,y1){const g=ctx.createLinearGradient(0,y0,0,y1);g.addColorStop(0,"#EEF2F4");g.addColorStop(.5,"#BCC5CC");g.addColorStop(1,"#87929B");return g;}
+function pill(ctx,text,x,y,align,col){ctx.font="800 11px 'Mukta Vaani', sans-serif";const w=ctx.measureText(text).width+12,h=18;let bx=align==="R"?x:x-w;ctx.fillStyle=TK["--surface"];ctx.strokeStyle=col||TK["--line"];ctx.lineWidth=1.2;ctx.beginPath();ctx.roundRect?ctx.roundRect(bx,y-h/2,w,h,9):ctx.rect(bx,y-h/2,w,h);ctx.fill();ctx.stroke();ctx.fillStyle=col||TK["--ink"];ctx.textAlign="left";ctx.textBaseline="middle";ctx.fillText(text,bx+6,y+.5);return {x:bx,w};}
+function leader(ctx,x1,y1,x2,y2){ctx.strokeStyle=TK["--muted"];ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.fillStyle=TK["--muted"];ctx.beginPath();ctx.arc(x1,y1,2,0,7);ctx.fill();}
+
+/* ---------- 2D main view ---------- */
+function job(){return (LM()||S.mode==="measure")?JOBS[S.job]:{t:"hole",n:"પ્રેક્ટિસ બ્લોક"};}
+function pocketX(t){return t==="hole"?[-6,6]:t==="slot"?[-14,14]:t==="step"?[-9,30]:t==="cbore"?[-20,20]:[-18,18];}
+function draw2D(){
+  const c=$("v2d");const {w,h,ctx}=fit(c);
+  const r=rodStart(),X=effX(),x=X/100,D=curD(),L=lift(),J=job();
+  ctx.fillStyle=TK["--sunk"];ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle=TK["--grid"];ctx.lineWidth=1;for(let gx=0;gx<w;gx+=16){ctx.beginPath();ctx.moveTo(gx+.5,0);ctx.lineTo(gx+.5,h);ctx.stroke();}for(let gy=0;gy<h;gy+=16){ctx.beginPath();ctx.moveTo(0,gy+.5);ctx.lineTo(w,gy+.5);ctx.stroke();}
+  const yTop=76+L,yBot=-(Math.max(D,r+x)+13);
+  const sc=Math.min((h-(w<230?110:80))/(yTop-yBot),(w-(w<230?8:20))/66);
+  const cx=w/2,oy=Math.max(44,(h-50-(yTop-yBot)*sc)/2+34);const XX=v=>cx+v*sc,YY=v=>oy+(yTop-v)*sc;
+  /* surface plate */
+  const jb=-(D+10);
+  ctx.fillStyle=TK["--plate"];ctx.fillRect(0,YY(jb),w,Math.max(6,h-YY(jb)));
+  ctx.fillStyle="rgba(255,255,255,.06)";for(let i=0;i<60;i++){ctx.fillRect((i*97)%w,YY(jb)+3+(i*13)%Math.max(4,h-YY(jb)-4),1.5,1.5);}
+  /* job block */
+  const jw=31;ctx.fillStyle=TK["--job"];ctx.fillRect(XX(-jw),YY(0),2*jw*sc,(D+10)*sc);
+  ctx.save();ctx.beginPath();ctx.rect(XX(-jw),YY(0),2*jw*sc,(D+10)*sc);ctx.clip();ctx.strokeStyle=TK["--hatch"];ctx.lineWidth=1;for(let i=-h;i<w+h;i+=8){ctx.beginPath();ctx.moveTo(i,YY(jb));ctx.lineTo(i+(D+10)*sc,YY(0));ctx.stroke();}ctx.restore();
+  /* pocket */
+  ctx.fillStyle=TK["--air"];const [p0,p1]=pocketX(J.t);
+  ctx.beginPath();
+  if(J.t==="bowl"){ctx.moveTo(XX(-18),YY(0));ctx.ellipse(XX(0),YY(0),18*sc,D*sc,0,Math.PI,0,true);ctx.closePath();}
+  else ctx.rect(XX(p0),YY(0),(Math.min(p1,jw)-p0)*sc+(J.t==="step"?2:0),D*sc);
+  ctx.fill();ctx.strokeStyle=TK["--ink"];ctx.lineWidth=1.4;ctx.stroke();
+  ctx.strokeRect(XX(-jw),YY(0),2*jw*sc,(D+10)*sc);
+  if(J.t==="step"){ctx.fillStyle=TK["--air"];ctx.fillRect(XX(jw)-1,YY(0)+1,4,D*sc-2);}
+  /* depth dimension */
+  if(LM()||S.mode==="measure"){const dx=J.t==="step"?XX(24):XX(p0)+ (J.t==="hole"?-14:10);
+    ctx.strokeStyle=TK["--accent"];ctx.lineWidth=1.3;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(dx,YY(0));ctx.lineTo(dx,YY(-D));ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=TK["--accent"];[[YY(0),1],[YY(-D),-1]].forEach(([yy,s])=>{ctx.beginPath();ctx.moveTo(dx,yy);ctx.lineTo(dx-4,yy+7*s);ctx.lineTo(dx+4,yy+7*s);ctx.fill();});
+    const lab=(LM()||S.revealed)?(w<230?f2(D):`D = ${f2(D)}`):"D = ?";ctx.save();ctx.translate(dx-6,YY(-D/2));ctx.rotate(-Math.PI/2);ctx.font="800 11px 'JetBrains Mono', monospace";ctx.textAlign="center";ctx.fillStyle=TK["--accent"];ctx.fillText(lab,0,0);ctx.restore();}
+  /* rod */
+  const tip=-(r+x)+L;
+  ctx.fillStyle=steelH(ctx,XX(-2),XX(2));ctx.fillRect(XX(-2),YY(8+L),4*sc,(8+L-tip)*sc);
+  ctx.beginPath();ctx.ellipse(XX(0),YY(tip),2*sc,.7*sc,0,0,Math.PI);ctx.fill();
+  ctx.strokeStyle="#4C565E";ctx.lineWidth=1;ctx.strokeRect(XX(-2),YY(8+L),4*sc,(8+L-tip)*sc);
+  if(contact()){ctx.fillStyle="rgba(19,145,90,.25)";ctx.beginPath();ctx.arc(XX(0),YY(tip),Math.max(9,4*sc),0,7);ctx.fill();ctx.fillStyle=TK["--ok"];ctx.beginPath();ctx.arc(XX(0),YY(tip),3,0,7);ctx.fill();}
+  if(L>0){ctx.strokeStyle=TK["--bad"];ctx.setLineDash([3,3]);ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(XX(-32),YY(0));ctx.lineTo(XX(32),YY(0));ctx.stroke();ctx.setLineDash([]);}
+  /* base */
+  ctx.fillStyle=steelV(ctx,YY(8+L),YY(L));ctx.fillRect(XX(-32),YY(8+L),64*sc,8*sc);
+  ctx.strokeStyle="#4C565E";ctx.lineWidth=1.2;ctx.strokeRect(XX(-32),YY(8+L),64*sc,8*sc);
+  ctx.fillStyle="#2A3238";ctx.fillRect(XX(-32),YY(L)-2,64*sc,2);
+  /* sleeve */
+  const sl0=8+L,sl1=37+L;ctx.fillStyle=steelH(ctx,XX(-4.5),XX(4.5));ctx.fillRect(XX(-4.5),YY(sl1),9*sc,29*sc);ctx.strokeStyle="#5E6A73";ctx.strokeRect(XX(-4.5),YY(sl1),9*sc,29*sc);
+  ctx.fillStyle="#1B2126";
+  for(let k=0;k<=25;k++){const yy=YY(35-k+L);ctx.fillRect(XX(-(k%5?1.6:2.4)),yy-.5,(k%5?1.6:2.4)*sc,1);if(k<25){const y2=YY(34.5-k+L);ctx.fillRect(XX(0),y2-.5,1.2*sc,1);}}
+  ctx.fillRect(XX(0)-.5,YY(35.2+L),1,(35.2-9)*sc);
+  if(sc>4.2){ctx.font=`700 ${Math.round(1.7*sc)}px 'JetBrains Mono', monospace`;ctx.textAlign="right";ctx.textBaseline="middle";for(let k=0;k<=25;k+=5)ctx.fillText(k,XX(-2.7),YY(35-k+L));}
+  /* lock nut */
+  ctx.fillStyle=steelH(ctx,XX(4.5),XX(9));ctx.fillRect(XX(4.5),YY(15+L),4.5*sc,4*sc);ctx.strokeStyle="#5E6A73";ctx.strokeRect(XX(4.5),YY(15+L),4.5*sc,4*sc);
+  ctx.fillStyle=steelH(ctx,XX(9),XX(12.5));ctx.beginPath();ctx.roundRect?ctx.roundRect(XX(9),YY(16.5+L),3.5*sc,7*sc,2):ctx.rect(XX(9),YY(16.5+L),3.5*sc,7*sc);ctx.fill();ctx.stroke();
+  /* thimble */
+  const ty0=35-x+L,ty1=ty0+28;
+  ctx.fillStyle=steelH(ctx,XX(-6),XX(6));ctx.beginPath();ctx.moveTo(XX(-5.2),YY(ty0));ctx.lineTo(XX(5.2),YY(ty0));ctx.lineTo(XX(6),YY(ty0+1.4));ctx.lineTo(XX(6),YY(ty1));ctx.lineTo(XX(-6),YY(ty1));ctx.lineTo(XX(-6),YY(ty0+1.4));ctx.closePath();ctx.fill();ctx.strokeStyle="#4C565E";ctx.lineWidth=1.2;ctx.stroke();
+  ctx.strokeStyle="rgba(30,36,40,.55)";ctx.lineWidth=1;for(let i=-5;i<=5;i++){const xx=XX(6*Math.sin(i/5*1.35));ctx.beginPath();ctx.moveTo(xx,YY(ty1-1));ctx.lineTo(xx,YY(ty0+15));ctx.stroke();}
+  ctx.beginPath();ctx.moveTo(XX(-6),YY(ty0+15));ctx.lineTo(XX(6),YY(ty0+15));ctx.stroke();
+  const t=X%50;ctx.strokeStyle="#1B2126";for(let k=0;k<50;k++){let th=((k-t)/50)*Math.PI*2;th=Math.atan2(Math.sin(th),Math.cos(th));const cth=Math.cos(th);if(cth<.1)continue;const xx=XX(5.6*Math.sin(th));ctx.globalAlpha=cth;ctx.lineWidth=k===t?1.6:.8;ctx.beginPath();ctx.moveTo(xx,YY(ty0+.3));ctx.lineTo(xx,YY(ty0+(k%5?1.6:2.6)));ctx.stroke();}ctx.globalAlpha=1;
+  /* ratchet */
+  ctx.fillStyle=steelH(ctx,XX(-3.6),XX(3.6));ctx.fillRect(XX(-3.6),YY(ty1+9),7.2*sc,9*sc);ctx.strokeStyle="#4C565E";ctx.strokeRect(XX(-3.6),YY(ty1+9),7.2*sc,9*sc);
+  ctx.strokeStyle="rgba(30,36,40,.5)";for(let i=-3;i<=3;i++){const xx=XX(3.6*Math.sin(i/3*1.3));ctx.beginPath();ctx.moveTo(xx,YY(ty1+8.4));ctx.lineTo(xx,YY(ty1+.6));ctx.stroke();}
+  ctx.fillStyle=steelV(ctx,YY(ty1+10.5),YY(ty1+9));ctx.beginPath();ctx.ellipse(XX(0),YY(ty1+9),3.6*sc,1.5*sc,0,Math.PI,0);ctx.fill();
+  /* labels */
+  if(S.labels&&w>=230){
+    const lx=XX(-14),rx=XX(14);
+    leader(ctx,XX(-3.6),YY(ty1+4.5),lx+2,YY(ty1+4.5));pill(ctx,"રેચેટ",lx,YY(ty1+4.5),"L");
+    leader(ctx,XX(-6),YY(ty0+9),lx+2,YY(ty0+9));pill(ctx,"થીમ્બલ",lx,YY(ty0+9),"L");
+    if(ty0-sl0>4){const sy=(ty0+sl0+3)/2;leader(ctx,XX(-4.5),YY(sy),lx+2,YY(sy));pill(ctx,"સ્લીવ",lx,YY(sy),"L");}
+    leader(ctx,XX(12.5),YY(13+L),rx+10,YY(13+L)-14);pill(ctx,"લૉક નટ",rx+8,YY(13+L)-14,"R");
+    pill(ctx,"બેઝ",XX(18),YY(4+L),"R");
+    if(tip< -3){const ry=(0+tip)/2+L/2;const lxx=XX(-14);leader(ctx,XX(-2),YY(ry),lxx+2,YY(ry));pill(ctx,"રોડ",lxx,YY(ry),"L");}
+    const jy=YY(jb)-12;ctx.font="800 11px 'Mukta Vaani', sans-serif";const jt="જોબ: "+J.n;ctx.textAlign="center";ctx.fillStyle=TK["--surface"];const jw2=ctx.measureText(jt).width+12;ctx.fillRect(cx-jw2/2,jy-9,jw2,18);ctx.fillStyle=TK["--ink"];ctx.textBaseline="middle";ctx.fillText(jt,cx,jy+.5);
+  }
+}
+
+/* ---------- zoom lens ---------- */
+function drawZoom(){drawLens($("zoom"),{X:effX(),xray:S.xray,hl:LM()||S.hint||S.revealed,labels:S.labels,main:true});}
+function drawLens(c,o){
+  const {w,h,ctx}=fit(c);
+  const X=o.X,x=X/100,P=parts(Math.max(0,X));
+  ctx.fillStyle=TK["--sunk"];ctx.fillRect(0,0,w,h);
+  const pm=h/9.2,ey=h*.42,cx=w/2,sw=Math.min(w*.32,pm*2.3),tw=Math.min(w*.47,pm*3.2);
+  if(o.main)LZ.pd=Math.max(3,tw*.95*Math.PI*2/50*.7);
+  const Ys=s=>ey+(s-x)*pm;
+  /* sleeve (full height so x-ray shows hidden lines) */
+  ctx.fillStyle=steelH(ctx,cx-sw,cx+sw);ctx.fillRect(cx-sw,0,2*sw,h);
+  ctx.fillStyle="#13181C";
+  for(let k=0;k<=25;k++){const y=Ys(k);if(y<-30||y>h+30)continue;const len=(k%5?.55:.78)*sw;ctx.fillRect(cx-len,y-1,len,2);
+    ctx.font=`800 ${k%5?12:15}px 'JetBrains Mono', monospace`;ctx.textAlign="right";ctx.textBaseline="middle";ctx.fillText(k,cx-len-4,y);}
+  for(let k=0;k<25;k++){const y=Ys(k+.5);if(y<-10||y>h+10)continue;ctx.fillRect(cx,y-1,.38*sw,2);}
+  ctx.fillRect(cx-.9,0,1.8,h);
+  /* thimble */
+  ctx.save();ctx.globalAlpha=o.xray?.38:1;
+  ctx.fillStyle=steelH(ctx,cx-tw,cx+tw);ctx.beginPath();ctx.moveTo(cx-tw*.9,ey);ctx.lineTo(cx+tw*.9,ey);ctx.lineTo(cx+tw,ey-.55*pm);ctx.lineTo(cx+tw,0);ctx.lineTo(cx-tw,0);ctx.lineTo(cx-tw,ey-.55*pm);ctx.closePath();ctx.fill();
+  ctx.strokeStyle="rgba(40,48,54,.6)";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cx-tw,ey-.55*pm);ctx.lineTo(cx+tw,ey-.55*pm);ctx.stroke();
+  ctx.restore();
+  /* thimble graduations */
+  const t=((X%50)+50)%50;
+  for(let k=0;k<50;k++){let th=((k-t)/50)*Math.PI*2;th=Math.atan2(Math.sin(th),Math.cos(th));const cth=Math.cos(th);if(cth<.12)continue;
+    const xx=cx+tw*.95*Math.sin(th),len=(k%5?1.25:1.95)*pm;ctx.globalAlpha=Math.min(1,cth*1.1);ctx.strokeStyle="#13181C";ctx.lineWidth=1.8*cth;ctx.beginPath();ctx.moveTo(xx,ey-1);ctx.lineTo(xx,ey-len);ctx.stroke();
+    if(k%5===0){ctx.save();ctx.translate(xx,ey-len-5);ctx.scale(Math.max(cth,.15),1);ctx.font="800 14px 'JetBrains Mono', monospace";ctx.textAlign="center";ctx.textBaseline="bottom";ctx.fillStyle="#13181C";ctx.fillText(k,0,0);ctx.restore();}}
+  ctx.globalAlpha=1;
+  /* edge shadow */
+  const sg=ctx.createLinearGradient(0,ey,0,ey+10);sg.addColorStop(0,"rgba(0,0,0,.32)");sg.addColorStop(1,"rgba(0,0,0,0)");ctx.fillStyle=sg;ctx.fillRect(cx-sw,ey,2*sw,10);
+  ctx.fillStyle="#2A3238";ctx.fillRect(cx-tw*.9,ey-1,tw*1.8,2);
+  /* highlights */
+  if(o.hl){
+    if(X>=0){const ym=Ys(P.msr);ctx.strokeStyle=TK["--mm"];ctx.lineWidth=3.2;ctx.setLineDash(ym<ey-1?[5,3]:[]);ctx.beginPath();ctx.moveTo(cx-.82*sw,ym);ctx.lineTo(cx,ym);ctx.stroke();ctx.setLineDash([]);
+    ctx.font="800 11px 'Mukta Vaani', sans-serif";const lt=`${P.msr} mm`;pillZ(ctx,lt,4,ym,TK["--mm"]);
+    if(P.half){const yh=Ys(P.msr+.5);ctx.strokeStyle=TK["--half"];ctx.lineWidth=3.2;ctx.beginPath();ctx.moveTo(cx,yh);ctx.lineTo(cx+.45*sw,yh);ctx.stroke();pillZ(ctx,"+0.5",w-4,yh,TK["--half"],true);}}
+    ctx.strokeStyle=TK["--th"];ctx.lineWidth=3.4;ctx.beginPath();ctx.moveTo(cx,ey-1);ctx.lineTo(cx,ey-1.95*pm);ctx.stroke();
+    pillZ(ctx,`${t} × 0.01`,w-4,ey-2.4*pm,TK["--th"],true);
+  }
+  if(o.labels){ctx.font="800 10px 'Mukta Vaani', sans-serif";ctx.fillStyle=TK["--muted"];ctx.textAlign="center";ctx.textBaseline="bottom";ctx.fillText("ડેટમ લાઇન ↓",cx,h-6);
+    ctx.textBaseline="top";ctx.fillText(o.xray?"થીમ્બલ (પારદર્શક)":"થીમ્બલ",cx,24);}
+  /* vignette frame */
+  const vg=ctx.createRadialGradient(cx,h/2,Math.min(w,h)*.35,cx,h/2,Math.max(w,h)*.75);vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(0,0,0,.18)");ctx.fillStyle=vg;ctx.fillRect(0,0,w,h);
+}
+function pillZ(ctx,text,x,y,col,right){ctx.font="800 11px 'Mukta Vaani', sans-serif";const tw=ctx.measureText(text).width+10,hh=18;const bx=right?x-tw:x;ctx.fillStyle=col;ctx.beginPath();ctx.roundRect?ctx.roundRect(bx,y-hh/2,tw,hh,9):ctx.rect(bx,y-hh/2,tw,hh);ctx.fill();ctx.fillStyle="#fff";ctx.textAlign="left";ctx.textBaseline="middle";ctx.fillText(text,bx+5,y+.5);}
+
+/* ---------- readout / status ---------- */
+function updateUI(){
+  const X=effX(),P=parts(X),r=rodStart();
+  $("oR").textContent=r;$("oM").textContent=P.msr;$("oH").textContent=P.half?"0.50":"0.00";$("oT").textContent=`${P.t}×0.01`;$("oTot").textContent=f2(r+X/100);
+  const show=LM()||S.revealed;$("readout").classList.toggle("masked",!show);$("maskmsg").classList.toggle("hide",show);
+  document.querySelectorAll("#rods button").forEach((b,i)=>b.classList.toggle("on",i===S.rod));
+  sl.value=X;sl.disabled=S.mode==="read";
+  const st=$("status");const m=maxX();let cls="",txt="";
+  if(m<0){cls="bad";txt="⚠️ રોડ લાંબો છે: બેઝ જોબ પર બેસતો નથી. નાનો રોડ પસંદ કરો.";}
+  else if(m>2500&&X===2500&&(LM()||S.mode==="measure")){cls="warn";txt="⚠️ રોડ ટૂંકો પડે છે. મોટો એક્સટેન્શન રોડ પસંદ કરો.";}
+  else if(contact()){cls="ok";txt="✅ રોડ તળિયે અડ્યો. રેચેટથી ટક-ટક કરો, પછી વાંચો.";}
+  else if(S.mode==="read"){txt="📖 મોટા દૃશ્યમાં જોઈને રીડિંગ લખો";}
+  else if(S.mode==="set"){txt="🎯 થીમ્બલ ફેરવીને લક્ષ્ય માપ સેટ કરો";}
+  else {txt="↻ થીમ્બલ ફેરવો: થીમ્બલ નીચે આવશે અને રોડ ઊંડે જશે";}
+  st.className="status "+cls;st.textContent=txt;
+  if(S.mode==="learn")learnLive();
+}
+
+/* ---------- render scheduling ---------- */
+let rq=false;function req(){if(rq)return;rq=true;requestAnimationFrame(()=>{rq=false;tokens();draw2D();drawZoom();updateUI();});}
+window.addEventListener("resize",()=>{req();drawTheoryStatic();});
+try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{req();setTimeout(drawTheoryStatic,30);});}catch(e){}
+new MutationObserver(()=>{req();setTimeout(drawTheoryStatic,30);}).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+
+/* ---------- modes ---------- */
+const P=$("panel");
+function scoreHtml(){return `<div class="score"><span>✅ સાચા: <b id="sc">${S.score} / ${S.tries}</b></span><span>🔥 સ્ટ્રીક <b id="sk">${S.streak}</b></span><span>🏆 બેસ્ટ <b id="sb">${S.best}</b></span></div>`;}
+function jobChips(){return `<div class="chips" id="jobs">${JOBS.map((j,i)=>`<button data-i="${i}" class="${i===S.job?"on":""}">${j.n}</button>`).join("")}</div>`;}
+function bindJobs(){P.querySelectorAll("#jobs button").forEach(b=>b.onclick=()=>{S.job=+b.dataset.i;S.depth=newDepth(JOBS[S.job]);S.X=0;S.revealed=false;S.hint=false;SFX.tap();P.querySelectorAll("#jobs button").forEach(x=>x.classList.toggle("on",x===b));const res=$("res");if(res)res.innerHTML="";const inp=$("ans");if(inp)inp.value="";req();});}
+function learnLive(){const X=effX(),p=parts(X),r=rodStart();const s=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
+  s("l1",r);s("l2",p.msr);s("l3",p.half?"હા → +0.50":"ના → +0.00");s("l4",`${p.t} × 0.01 = ${f2(p.t/100)}`);s("l5",f2(r+X/100)+" mm");}
+function renderPanel(){
+  const m=S.mode;
+  if(m==="theory"){renderTheory();return;}
+  if(m==="learn"){P.innerHTML=`
+    <h2>ડેપ્થ માઇક્રોમીટર કેવી રીતે વાંચવું?</h2>
+    <div class="callout"><b>⚠️ આ ઊલટો સ્કેલ છે!</b> સ્લીવ પરના આંકડા ઉપરથી નીચે (બેઝ તરફ) વધે છે. થીમ્બલ ફેરવતાં તે નીચે આવે છે અને લાઇનો ઢાંકતું જાય છે. એટલે અહીં <b>થીમ્બલ નીચે ઢંકાયેલી છેલ્લી લાઇન</b> વંચાય છે, દેખાતી નહીં.</div>
+    <ol class="steps">
+      <li><span>રોડનું શરૂઆતનું માપ (રોડ પર લખેલું)</span><b id="l1">0</b></li>
+      <li><span class="c-m">સ્લીવ: થીમ્બલ નીચે ઢંકાયેલી છેલ્લી mm લાઇન</span><b class="c-m" id="l2">0</b></li>
+      <li><span class="c-h">અડધી (0.5) લાઇન પણ ઢંકાઈ ગઈ છે?</span><b class="c-h" id="l3">ના</b></li>
+      <li><span class="c-t">થીમ્બલનો જે કાપો ડેટમ લાઇન સાથે મળે</span><b class="c-t" id="l4">0</b></li>
+      <li class="sum"><span><b>કુલ ઊંડાઈ</b></span><b class="c-a" id="l5">0.00</b></li>
+    </ol>
+    <p class="note">ટિપ: 🩻 એક્સ-રે ચાલુ કરો, તો થીમ્બલ નીચે છુપાયેલી લાઇનો દેખાશે.</p>
+    <h2>લીસ્ટ કાઉન્ટ</h2>
+    <div class="lc"><div><b>0.5 mm</b>પિચ (એક આંટે)</div><div><b>50</b>થીમ્બલ પર કાપા</div><div><b>0.01 mm</b>0.5 ÷ 50</div></div>
+    <div class="ansrow"><button class="btn acc" id="demo">▶ ડેમો: આપોઆપ ફેરવીને બતાવો</button></div>
+    <p><b>જોબ પસંદ કરો અને રોડ તળિયે અડાડો:</b></p>${jobChips()}
+    <h2>ભાગ અને તેનું કામ</h2>
+    <div class="parts">
+      <div><b>બેઝ</b>જોબની સપાટી પર સપાટ બેસે છે. માપ અહીંથી શરૂ થાય છે.</div>
+      <div><b>એક્સટેન્શન રોડ</b>0–25, 25–50, 50–75, 75–100 mm. ઊંડાઈ પ્રમાણે બદલાય.</div>
+      <div><b>સ્લીવ (બેરલ)</b>mm અને 0.5 mm ની ઊલટા ક્રમની લાઇનો, વચ્ચે ડેટમ લાઇન.</div>
+      <div><b>થીમ્બલ</b>50 કાપા. એક આંટો = 0.5 mm, એક કાપો = 0.01 mm.</div>
+      <div><b>રેચેટ સ્ટોપ</b>દરેક વખતે એકસરખું હળવું દબાણ આપે છે.</div>
+      <div><b>લૉક નટ</b>માપ લીધા પછી થીમ્બલને સ્થિર કરે છે.</div>
+    </div>
+    <h2>માપતી વખતે ધ્યાન રાખો</h2>
+    <ul class="tips">
+      <li>જોબ અને બેઝ સાફ કરો. ચિપ્સ કે તેલ હોય તો માપ ખોટું આવે.</li>
+      <li>શૂન્ય ચકાસો: 0–25 રોડ લગાવી, સરફેસ પ્લેટ પર બેઝ મૂકો. વાંચન 0.00 આવવું જોઈએ.</li>
+      <li>બેઝને એક હાથથી મજબૂત દબાવી રાખો. બેઝ ઊંચો થાય તો વાંચન વધી જાય.</li>
+      <li>છેલ્લે રેચેટથી 2–3 ટક-ટક કરો. થીમ્બલથી જોર ન કરો.</li>
+      <li>રોડ બદલો ત્યારે રોડનું માપ (25, 50, 75) ઉમેરવાનું ભૂલશો નહીં.</li>
+    </ul>`;
+    bindJobs();
+    $("demo").onclick=()=>{ac();const hi=hiX();if(hi<=0){toast("પહેલાં યોગ્ય રોડ પસંદ કરો.");return;}const tgt=Math.max(50,Math.floor(Math.random()*Math.min(hi,2500)));cancelAnimationFrame(rAnim);
+      const run=()=>{const d=tgt-effX();if(d===0){SFX.ok();toast(`વાંચન: ${f2(total())} mm. મોટા દૃશ્યમાં રંગ જુઓ 👀`);return;}setX(effX()+Math.sign(d)*Math.min(Math.abs(d),Math.abs(d)>80?14:3),"demo");rAnim=requestAnimationFrame(run);};run();};
+  }
+  if(m==="measure"){P.innerHTML=`
+    <h2>🔧 જોબની ઊંડાઈ માપો</h2>${scoreHtml()}
+    <p>1) જોબ પસંદ કરો 2) યોગ્ય રોડ લગાવો 3) થીમ્બલ ફેરવો 4) છેલ્લે રેચેટ 5) મોટા દૃશ્યમાં વાંચીને લખો.</p>
+    ${jobChips()}
+    <div class="ansrow"><input id="ans" inputmode="decimal" autocomplete="off" placeholder="તમારું વાંચન (mm), દા.ત. 12.46" aria-label="તમારું વાંચન"><button class="btn" id="chk">ચકાસો</button></div>
+    <div class="ansrow"><button class="btn alt" id="hint">💡 સંકેત</button><button class="btn alt" id="show">👁 જવાબ બતાવો</button><button class="btn alt" id="nx">↻ નવો જોબ</button></div>
+    <div id="res"></div>`;
+    bindJobs();bindAns();$("nx").onclick=()=>{S.depth=newDepth(JOBS[S.job]);S.X=0;S.revealed=false;S.hint=false;$("res").innerHTML="";$("ans").value="";SFX.tap();req();};
+  }
+  if(m==="read"){P.innerHTML=`
+    <h2>📖 રીડિંગ લો</h2>${scoreHtml()}
+    <p>માઇક્રોમીટર સેટ કરેલું છે અને થીમ્બલ લૉક છે. રોડ અને મોટું દૃશ્ય જોઈને mm માં રીડિંગ લખો.</p>
+    <div class="ansrow"><input id="ans" inputmode="decimal" autocomplete="off" placeholder="વાંચન (mm)" aria-label="વાંચન"><button class="btn" id="chk">ચકાસો</button></div>
+    <div class="ansrow"><button class="btn alt" id="hint">💡 સંકેત</button><button class="btn alt" id="show">👁 જવાબ બતાવો</button><button class="btn acc" id="nx">નવું રીડિંગ ➜</button></div>
+    <div id="res"></div>`;
+    bindAns();$("nx").onclick=()=>{newRead();SFX.tap();};
+  }
+  if(m==="set"){P.innerHTML=`
+    <h2>🎯 આ માપ પર સેટ કરો</h2>${scoreHtml()}
+    <div class="target" id="tg">${f2(S.target)} mm</div>
+    <p>યોગ્ય એક્સટેન્શન રોડ પસંદ કરો. પછી થીમ્બલ ખેંચીને, સ્લાઇડર કે બટનથી બરાબર આ માપ લાવો. રીડિંગ છુપાયેલું છે.</p>
+    <div class="ansrow"><button class="btn" id="chk">ચકાસો</button><button class="btn alt" id="hint">💡 સંકેત</button><button class="btn acc" id="nx">નવું માપ ➜</button></div>
+    <div id="res"></div>`;
+    $("chk").onclick=()=>check(null);$("hint").onclick=hint;$("nx").onclick=()=>{newSet();SFX.tap();};
+  }
+}
+function showAns(){if(S.mode==="measure"&&!contact()){toast("⬇ પહેલાં રોડ તળિયે અડાડો, પછી જવાબ દેખાશે.");return;}S.streak=0;S.revealed=true;S.hint=true;const sk=$("sk");if(sk)sk.textContent=0;$("res").innerHTML=`<div class="result bad">👁 જવાબ: <b>${f2(total())} mm</b><br><small>${explain()}</small></div>`;SFX.tap();req();}
+function bindAns(){const sw=$("show");if(sw)sw.onclick=showAns;$("chk").onclick=()=>check($("ans").value);$("ans").addEventListener("keydown",e=>{if(e.key==="Enter")check($("ans").value);});$("hint").onclick=hint;}
+function hint(){S.hint=true;S.streak=0;const sk=$("sk");if(sk)sk.textContent=0;SFX.tap();toast("💡 મોટા દૃશ્યમાં રંગીન નિશાની જુઓ (સ્ટ્રીક શૂન્ય થઈ).");req();}
+function parseNum(s){s=String(s||"").trim().replace(/[૦-૯]/g,d=>"૦૧૨૩૪૫૬૭૮૯".indexOf(d)).replace(",",".");const v=parseFloat(s);return isNaN(v)?null:v;}
+function explain(){const X=effX(),p=parts(X),r=rodStart();return `${r} (રોડ) + ${p.msr} (સ્લીવ) + ${p.half?"0.50":"0.00"} (અડધી) + ${p.t}×0.01 = ${f2(r+X/100)} mm`;}
+function verdict(ok,msg){S.tries++;const res=$("res");res.innerHTML=`<div class="result ${ok?"ok":"bad"}">${msg}</div>`;
+  if(ok){S.score++;S.streak++;if(S.streak>S.best)S.best=S.streak;save();SFX.ok();vib(35);if(S.streak%5===0){SFX.win();toast(`🔥 ${S.streak} સળંગ સાચા! તમે તો મેટ્રોલોજી માસ્ટર છો.`);}}
+  else{S.streak=0;SFX.bad();vib([60,40,60]);}
+  S.revealed=true;["sc","sk","sb"].forEach((id,i)=>{const e=$(id);if(e)e.textContent=[S.score+" / "+S.tries,S.streak,S.best][i];});req();}
+function check(raw){ac();
+  if(S.mode==="set"){const ok=Math.round(total()*100)===Math.round(S.target*100);
+    verdict(ok,ok?`✅ શાબાશ! બરાબર ${f2(S.target)} mm સેટ થયું.<br><small>${explain()}</small>`:`❌ હાલનું વાંચન ${f2(total())} mm છે, લક્ષ્ય ${f2(S.target)} mm.<br><small>${explain()}</small>`);return;}
+  const v=parseNum(raw);if(v===null){toast("✍️ પહેલાં વાંચન આંકડામાં લખો, દા.ત. 12.46");return;}
+  if(S.mode==="measure"){
+    if(maxX()<0){SFX.bad();toast("⚠️ રોડ લાંબો છે. પહેલાં નાનો રોડ લગાવો.");return;}
+    if(!contact()){SFX.bad();toast("⬇ રોડ હજી તળિયે અડ્યો નથી. રેચેટ ફેરવો.");return;}}
+  const tr=total(),ok=Math.round(v*100)===Math.round(tr*100);
+  verdict(ok,ok?`✅ એકદમ સાચું! ${f2(tr)} mm<br><small>${explain()}</small>`:`❌ તમે ${f2(v)} લખ્યું. સાચું વાંચન ${f2(tr)} mm.<br><small>${explain()}</small>`);}
+function newRead(){const w=[0,0,0,1,1,2,3];S.rod=w[Math.floor(Math.random()*w.length)];S.X=Math.floor(Math.random()*2501);S.revealed=false;S.hint=false;const a=$("ans");if(a)a.value="";const r=$("res");if(r)r.innerHTML="";req();}
+function newSet(){const w=[0,0,1,1,2,3];const r=w[Math.floor(Math.random()*w.length)];S.target=RODS[r]+Math.floor(Math.random()*2501)/100;S.rod=0;S.X=0;S.revealed=false;S.hint=false;const t=$("tg");if(t)t.textContent=f2(S.target)+" mm";const re=$("res");if(re)re.innerHTML="";req();}
+function setMode(m){S.mode=m;S.hint=false;S.revealed=false;cancelAnimationFrame(rAnim);cancelAnimationFrame(TH.anim);
+  document.querySelectorAll(".modes button").forEach(b=>b.classList.toggle("on",b.dataset.m===m));
+  if(m==="learn"){S.rod=0;S.X=0;}
+  if(m==="measure"){S.rod=0;S.X=0;S.depth=newDepth(JOBS[S.job]);}
+  if(m==="read")newRead();
+  if(m==="set")newSet();
+  renderPanel();req();}
+document.querySelectorAll(".modes button").forEach(b=>b.onclick=()=>{SFX.tap();setMode(b.dataset.m);});
+
+/* ---------- theory ---------- */
+const QZ=[
+  ["પિચ 0.5 mm અને થીમ્બલ પર 50 કાપા હોય તો લીસ્ટ કાઉન્ટ કેટલો?",["0.1 mm","0.05 mm","0.01 mm","0.001 mm"],2,"LC = પિચ ÷ કાપા = 0.5 ÷ 50 = 0.01 mm."],
+  ["ડેપ્થ માઇક્રોમીટરમાં સ્લીવ પરની કઈ લાઇન વંચાય?",["છેલ્લી દેખાતી લાઇન","થીમ્બલ નીચે ઢંકાયેલી છેલ્લી લાઇન","પહેલી દેખાતી લાઇન","કોઈ પણ લાઇન"],1,"ઊંડાઈ વધે તેમ થીમ્બલ નીચે આવી લાઇનો ઢાંકે છે, એટલે ઢંકાયેલી છેલ્લી લાઇન વંચાય."],
+  ["25–50 રોડ, સ્લીવ 13 (અડધી નહીં), થીમ્બલ 21. વાંચન કેટલું?",["13.21 mm","38.21 mm","13.71 mm","63.21 mm"],1,"25 + 13 + 0.00 + 0.21 = 38.21 mm. રોડનું 25 ઉમેરવાનું ભૂલશો નહીં."],
+  ["શૂન્ય ભૂલ +0.03 mm છે અને વાંચન 12.46 mm આવ્યું. સાચું માપ?",["12.49 mm","12.43 mm","12.46 mm","12.40 mm"],1,"સાચું માપ = વાંચન − (+0.03) = 12.43 mm."],
+  ["રેચેટ સ્ટોપનું મુખ્ય કામ શું છે?",["ઝડપથી ફેરવવું","દર વખતે એકસરખું દબાણ આપવું","રોડ લૉક કરવો","શૂન્ય સેટ કરવું"],1,"વધુ જોર આવે ત્યારે રેચેટ સરકી જાય છે, એટલે દબાણ હંમેશા એકસરખું રહે."],
+  ["થીમ્બલ એક પૂરો આંટો ફેરવો તો રોડ કેટલો ખસે?",["0.01 mm","0.25 mm","0.5 mm","1.0 mm"],2,"એક આંટો = પિચ = 0.5 mm. એટલે 2 આંટા = 1 mm."],
+  ["ઊંડાઈ આશરે 31 mm છે. કયો એક્સટેન્શન રોડ લગાવશો?",["0–25","25–50","50–75","75–100"],1,"31 mm, 25 અને 50 ની વચ્ચે છે, એટલે 25–50 રોડ."],
+  ["ત્રાંસું જોઈને વાંચવાથી થતી ભૂલને શું કહે છે?",["શૂન્ય ભૂલ","પેરેલેક્સ ભૂલ","બૅકલેશ","થર્મલ ભૂલ"],1,"આંખ ડેટમ લાઇનની બરાબર સામે રાખીને વાંચો."]
+];
+let TH={div:73,anim:null,ax:0,dir:1};
+function renderTheory(){
+  const toc=[["t1","શું છે"],["t2","સ્ક્રૂનો સિદ્ધાંત"],["t3","લીસ્ટ કાઉન્ટ"],["t4","ઊલટો સ્કેલ"],["t5","વાંચનનાં ઉદાહરણ"],["t6","એક્સટેન્શન રોડ"],["t7","રેચેટ"],["t8","શૂન્ય ભૂલ"],["t9","ભૂલનાં કારણો"],["t10","માપવાની રીત"],["t11","સંભાળ"],["t12","શબ્દકોશ"],["t13","ક્વિઝ"]];
+  P.innerHTML=`
+  <h2>📘 ડેપ્થ માઇક્રોમીટર કેવી રીતે કામ કરે છે?</h2>
+  <p class="note">સરળ શબ્દોમાં, આકૃતિ સાથે. ઉપરનું સિમ્યુલેટર ચાલુ જ છે, વાંચતાં-વાંચતાં સાથે અજમાવતા રહો.</p>
+  <div class="th-toc">${toc.map((t,i)=>`<button data-go="${t[0]}">${i+1}. ${t[1]}</button>`).join("")}</div>
+
+  <div class="th" id="t1"><h3><span class="n">01</span>ડેપ્થ માઇક્રોમીટર શું છે?</h3>
+    <p><b>ડેપ્થ એટલે ઊંડાઈ.</b> આ સાધન હોલ, ખાંચો (સ્લોટ), સ્ટેપ અને બોરની ઊંડાઈ <b>0.01 mm</b> ની ચોકસાઈથી માપે છે. બેઝ ઉપરની સપાટી પર બેસે છે અને રોડ નીચે તળિયાને અડે છે. બેઝની નીચેની સપાટીથી રોડના છેડા સુધીનું અંતર એટલે ઊંડાઈ.</p>
+    <div class="tbl"><table><tr><th>સાધન</th><th>ઊંડાઈ માપની ચોકસાઈ</th></tr>
+      <tr><td>સ્ટીલ રૂલ</td><td class="mono">0.5 mm</td></tr>
+      <tr><td>વર્નિયર કેલિપરનો ડેપ્થ બાર</td><td class="mono">0.02 mm</td></tr>
+      <tr><td><b>ડેપ્થ માઇક્રોમીટર</b></td><td class="mono"><b>0.01 mm</b></td></tr></table></div>
+    <p>ક્યાં વપરાય: ડીઝલ પિસ્ટનના બાઉલની ઊંડાઈ, વાલ્વ સીટનો રીસેસ, કી-વે, બેરિંગ હાઉસિંગ, ઓઇલ હોલ અને સ્ટેપવાળા જોબ.</p>
+    <div class="key"><b>યાદ રાખો</b>ભાગ છ: બેઝ, સ્લીવ, થીમ્બલ, રેચેટ, લૉક નટ અને એક્સટેન્શન રોડ. ઉપર "🏷 ભાગનાં નામ" ચાલુ કરીને જુઓ.</div>
+  </div>
+
+  <div class="th" id="t2"><h3><span class="n">02</span>સ્ક્રૂનો સિદ્ધાંત: નટ-બોલ્ટ જેવું જ</h3>
+    <p>સ્લીવની અંદર એક ચોકસાઈવાળો <b>નટ</b> છે, અને થીમ્બલ સાથે જોડાયેલો <b>સ્પિન્ડલ</b> એક ઝીણો <b>સ્ક્રૂ</b> છે. થીમ્બલ ફેરવો એટલે સ્ક્રૂ નટમાં આગળ વધે, જેમ બોલ્ટ નટમાં જાય. સ્પિન્ડલ સાથે રોડ જોડાયેલો છે, એટલે રોડ નીચે જાય.</p>
+    <p><b>એક પૂરો આંટો = 0.5 mm.</b> એક આંટામાં સ્ક્રૂ જેટલું આગળ વધે, તે અંતરને <b>પિચ</b> કહે છે.</p>
+    <div class="screwbox">
+      <canvas id="cScrew" aria-label="સ્ક્રૂ અને નટની આકૃતિ"></canvas>
+      <div class="screwout">
+        <label for="sScrew"><b>થીમ્બલ ફેરવો (સ્લાઇડર ખસેડો)</b></label>
+        <input type="range" id="sScrew" min="0" max="200" step="1" value="${TH.div}">
+        <div id="oScrew"></div>
+        <div class="key"><b>જુઓ</b>સ્લાઇડરને 50 કાપા ખસેડો, એટલે એક પૂરો આંટો થાય અને રોડ બરાબર 0.50 mm નીચે જાય.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="th" id="t3"><h3><span class="n">03</span>લીસ્ટ કાઉન્ટ (લઘુતમ માપ)</h3>
+    <p>સાધનથી માપી શકાતું <b>સૌથી નાનું માપ</b> એટલે લીસ્ટ કાઉન્ટ. એક આંટો (0.5 mm) થીમ્બલના 50 સરખા ભાગમાં વહેંચાયેલો છે.</p>
+    <div class="formula">LC = પિચ ÷ થીમ્બલ પરના કાપા<br>LC = 0.5 mm ÷ 50 = 0.01 mm</div>
+    <div class="lc"><div><b>0.5 mm</b>પિચ (એક આંટે)</div><div><b>50</b>થીમ્બલ પર કાપા</div><div><b>0.01 mm</b>એક કાપો</div></div>
+    <p>એટલે થીમ્બલનો એક કાપો ફેરવો તો રોડ 0.01 mm ખસે. આ માથાના વાળની જાડાઈ કરતાં પણ ઘણું પાતળું છે.</p>
+  </div>
+
+  <div class="th" id="t4"><h3><span class="n">04</span>સ્કેલ ઊલટો કેમ છે?</h3>
+    <div class="cmp">
+      <div><b>આઉટસાઇડ માઇક્રોમીટર</b>માપ વધે તેમ થીમ્બલ ફ્રેમથી <b>દૂર</b> જાય. લાઇનો <b>ખુલ્લી</b> થાય. એટલે <b>છેલ્લી દેખાતી</b> લાઇન વંચાય.</div>
+      <div class="hl"><b>ડેપ્થ માઇક્રોમીટર</b>ઊંડાઈ વધે તેમ થીમ્બલ બેઝ તરફ <b>નીચે</b> આવે. લાઇનો <b>ઢંકાય</b>. એટલે <b>છેલ્લી ઢંકાયેલી</b> લાઇન વંચાય. તેથી આંકડા ઉપરથી નીચે વધે છે.</div>
+    </div>
+    <div class="figs"><figure class="fig" style="margin:0"><canvas id="cSweep" aria-label="થીમ્બલ નીચે આવીને લાઇનો ઢાંકે છે તેનું એનિમેશન"></canvas><figcaption class="cap" id="oSweep"></figcaption></figure>
+      <div class="key" style="align-self:start"><b>સૌથી સામાન્ય ભૂલ</b>દેખાતી લાઇન વાંચવી. 7.46 હોય ત્યારે નીચે દેખાતી 7.5 ની લાઇન વાંચો તો <b>7.96</b> લખાઈ જાય, જે 0.5 mm ખોટું છે. 🩻 એક્સ-રે ચાલુ કરીને ઢંકાયેલી લાઇન જુઓ.</div></div>
+  </div>
+
+  <div class="th" id="t5"><h3><span class="n">05</span>વાંચન: 4 પગલાં, 3 ઉદાહરણ</h3>
+    <div class="formula">ઊંડાઈ = રોડ + <span class="c-m">સ્લીવ mm</span> + <span class="c-h">અડધી (0.50)</span> + <span class="c-t">થીમ્બલ કાપા × 0.01</span></div>
+    <div class="figs">
+      <figure class="fig" style="margin:0"><canvas id="cEx1"></canvas><figcaption class="cap">0–25 રોડ<br><b>0 + 12 + 0.00 + 0.46 = 12.46 mm</b></figcaption></figure>
+      <figure class="fig" style="margin:0"><canvas id="cEx2"></canvas><figcaption class="cap">0–25 રોડ, અડધી લાઇન ઢંકાયેલી<br><b>0 + 7 + 0.50 + 0.33 = 7.83 mm</b></figcaption></figure>
+      <figure class="fig" style="margin:0"><canvas id="cEx3"></canvas><figcaption class="cap">25–50 રોડ<br><b>25 + 13 + 0.00 + 0.21 = 38.21 mm</b></figcaption></figure>
+    </div>
+  </div>
+
+  <div class="th" id="t6"><h3><span class="n">06</span>એક્સટેન્શન રોડ</h3>
+    <p>સ્ક્રૂ ફક્ત <b>25 mm</b> જ ખસી શકે. વધુ ઊંડાઈ માટે લાંબો રોડ લગાવાય છે. રોડ પર તેની રેન્જ લખેલી હોય છે.</p>
+    <div class="tbl"><table><tr><th>રોડ</th><th>માપી શકાતી ઊંડાઈ</th><th>વાંચનમાં ઉમેરો</th></tr>
+      <tr><td class="mono">0–25</td><td class="mono">0 થી 25 mm</td><td class="mono">+0</td></tr>
+      <tr><td class="mono">25–50</td><td class="mono">25 થી 50 mm</td><td class="mono">+25</td></tr>
+      <tr><td class="mono">50–75</td><td class="mono">50 થી 75 mm</td><td class="mono">+50</td></tr>
+      <tr><td class="mono">75–100</td><td class="mono">75 થી 100 mm</td><td class="mono">+75</td></tr></table></div>
+    <p><b>કયો રોડ?</b> પહેલાં સ્ટીલ રૂલથી અંદાજ લો. 31 mm લાગે તો 25–50 રોડ. ખોટો લાંબો રોડ લગાવો તો બેઝ જોબ પર બેસશે જ નહીં. ઉપર "માપો" મોડમાં અજમાવી જુઓ.</p>
+    <div class="key"><b>રોડ બદલતી વખતે</b>રોડ અને બેસવાની જગ્યા સાફ કરો, કેપ બરાબર કસો, અને લાંબા રોડ માટે સેટિંગ સ્ટાન્ડર્ડ (ગેજ) થી શૂન્ય ચકાસો.</div>
+  </div>
+
+  <div class="th" id="t7"><h3><span class="n">07</span>રેચેટ સ્ટોપ: ટક-ટક શા માટે?</h3>
+    <p>રેચેટની અંદર નાના <b>દાંતા અને સ્પ્રિંગ</b> છે. રોડ તળિયે અડે અને જોર વધે, એટલે દાંતા સરકી જાય અને <b>ટક-ટક</b> અવાજ આવે. તેથી દર વખતે, દરેક વ્યક્તિ માટે, દબાણ એકસરખું અને હળવું રહે.</p>
+    <p>થીમ્બલથી સીધું જોર કરો તો બેઝ સહેજ ઊંચો થાય કે રોડ દબાય. પરિણામ: <b>માપ વધુ આવે.</b></p>
+    <div class="key"><b>સાચી રીત</b>તળિયું પાસે આવે ત્યારે થીમ્બલ છોડી દો. રેચેટથી 2 થી 3 ટક-ટક કરો. પછી લૉક નટ કસીને વાંચો.</div>
+  </div>
+
+  <div class="th" id="t8"><h3><span class="n">08</span>શૂન્ય ભૂલ: માપ પહેલાં ફરજિયાત ચકાસણી</h3>
+    <ol class="sop"><li>0–25 રોડ લગાવો. બેઝ અને રોડનો છેડો સાફ કરો.</li><li>બેઝને સરફેસ પ્લેટ પર મજબૂત દબાવો.</li><li>રેચેટ ફેરવો, જ્યાં સુધી રોડ પ્લેટને અડે.</li><li>વાંચન <b>0.00</b> આવવું જોઈએ. ન આવે તો એ શૂન્ય ભૂલ છે.</li></ol>
+    <div class="figs">
+      <figure class="fig" style="margin:0"><canvas id="cZ1"></canvas><figcaption class="cap"><b>ધન (+) શૂન્ય ભૂલ = +0.03</b><br>0 ની લાઇન ઢંકાઈ ગઈ, થીમ્બલનો 3 કાપો ડેટમ પર.</figcaption></figure>
+      <figure class="fig" style="margin:0"><canvas id="cZ2"></canvas><figcaption class="cap"><b>ઋણ (−) શૂન્ય ભૂલ = −0.02</b><br>0 ની લાઇન હજી દેખાય, થીમ્બલનો 48 કાપો ડેટમ પર.</figcaption></figure>
+    </div>
+    <div class="formula">સાચું માપ = વાંચન − (શૂન્ય ભૂલ, ચિહ્ન સાથે)<br>વાંચન 12.46, ભૂલ +0.03 → 12.46 − 0.03 = 12.43 mm<br>વાંચન 12.46, ભૂલ −0.02 → 12.46 + 0.02 = 12.48 mm</div>
+    <p>ભૂલ કાયમ દૂર કરવા: સાથે આવતા C-સ્પેનરથી સ્લીવ સહેજ ફેરવીને ડેટમ લાઇનને થીમ્બલના 0 સાથે મેળવાય છે.</p>
+  </div>
+
+  <div class="th" id="t9"><h3><span class="n">09</span>ભૂલનાં કારણો અને ઉપાય</h3>
+    <div class="err">
+      <div><span>બેઝ બરાબર ન બેસે: ધૂળ, બર કે ઝુકાવ</span><span>સપાટી સાફ કરો, બર કાઢો, બેઝ બંને બાજુ દબાવો</span></div>
+      <div><span>થીમ્બલથી વધુ જોર</span><span>છેલ્લું દબાણ ફક્ત રેચેટથી</span></div>
+      <div><span>દેખાતી લાઇન વાંચવી</span><span>ઢંકાયેલી છેલ્લી લાઇન વાંચો</span></div>
+      <div><span>રોડનું માપ ઉમેરવાનું ભૂલી જવું</span><span>25, 50 કે 75 ઉમેરો</span></div>
+      <div><span>ત્રાંસું જોવું (પેરેલેક્સ ભૂલ)</span><span>આંખ ડેટમ લાઇનની બરાબર સામે રાખો</span></div>
+      <div><span>હાથની ગરમીથી ધાતુ ફૂલે</span><span>સાધન ઓછું પકડો, ચોકસાઈનું માપ 20°C પર લેવાય</span></div>
+      <div><span>શૂન્ય ભૂલ ન ચકાસવી</span><span>દરેક વખતે માપ પહેલાં શૂન્ય ચકાસો</span></div>
+    </div>
+  </div>
+
+  <div class="th" id="t10"><h3><span class="n">10</span>માપવાની સાચી રીત (પગલાં)</h3>
+    <ol class="sop">
+      <li>જોબ અને સાધન સાફ કરો. જોબમાંથી બર કાઢો.</li>
+      <li>સ્ટીલ રૂલથી ઊંડાઈનો અંદાજ લો અને યોગ્ય રોડ લગાવો.</li>
+      <li>શૂન્ય ચકાસો.</li>
+      <li>થીમ્બલ ઉપર લઈ જાઓ, જેથી રોડ અંદર રહે.</li>
+      <li>બેઝને જોબની ઉપરની સપાટી પર મૂકો અને એક હાથથી મજબૂત દબાવો.</li>
+      <li>થીમ્બલ ફેરવો, રોડ તળિયાની પાસે આવે ત્યારે રેચેટથી 2-3 ટક-ટક કરો.</li>
+      <li>લૉક નટ કસો અને આંખ સામે રાખીને વાંચો.</li>
+      <li>ઓછામાં ઓછું 2-3 વખત માપો અને સરેરાશ લો.</li>
+    </ol>
+  </div>
+
+  <div class="th" id="t11"><h3><span class="n">11</span>સંભાળ</h3>
+    <ul class="tips"><li>વાપર્યા પછી સૂકા, સ્વચ્છ કપડાથી લૂછો અને ખૂબ પાતળું તેલ લગાવો.</li><li>લૉક નટ ઢીલો રાખીને બૉક્સમાં મૂકો.</li><li>પડવા ન દો. પડે તો શૂન્ય અને ચોકસાઈ ફરી ચકાસો.</li><li>ગ્રાઇન્ડિંગ મશીન, ચુંબક અને ગરમીથી દૂર રાખો.</li><li>નિયમિત સમયે સ્લિપ ગેજથી કેલિબ્રેશન કરાવો.</li></ul>
+  </div>
+
+  <div class="th" id="t12"><h3><span class="n">12</span>શબ્દકોશ</h3>
+    <div class="tbl"><table><tr><th>ગુજરાતી</th><th>English</th><th>અર્થ</th></tr>
+      <tr><td>બેઝ</td><td>Base</td><td>જોબ પર બેસતો સપાટ, સખત ભાગ</td></tr>
+      <tr><td>સ્લીવ / બેરલ</td><td>Sleeve / Barrel</td><td>mm અને 0.5 mm ની લાઇનોવાળી સ્થિર નળી</td></tr>
+      <tr><td>થીમ્બલ</td><td>Thimble</td><td>50 કાપાવાળો ફરતો ભાગ</td></tr>
+      <tr><td>ડેટમ લાઇન</td><td>Datum line</td><td>સ્લીવ પરની ઊભી સંદર્ભ લાઇન</td></tr>
+      <tr><td>પિચ</td><td>Pitch</td><td>એક આંટામાં ખસતું અંતર, 0.5 mm</td></tr>
+      <tr><td>લીસ્ટ કાઉન્ટ</td><td>Least count</td><td>સૌથી નાનું માપ, 0.01 mm</td></tr>
+      <tr><td>રેચેટ સ્ટોપ</td><td>Ratchet stop</td><td>એકસરખું દબાણ આપતો ભાગ</td></tr>
+      <tr><td>લૉક નટ</td><td>Lock nut</td><td>માપ સ્થિર રાખતો ભાગ</td></tr>
+      <tr><td>એક્સટેન્શન રોડ</td><td>Extension rod</td><td>ઊંડાઈ પ્રમાણે બદલાતો માપનો રોડ</td></tr>
+      <tr><td>શૂન્ય ભૂલ</td><td>Zero error</td><td>શૂન્ય પર 0.00 ન આવે તે ભૂલ</td></tr>
+      <tr><td>પેરેલેક્સ</td><td>Parallax</td><td>ત્રાંસું જોવાથી થતી ભૂલ</td></tr></table></div>
+  </div>
+
+  <div class="th" id="t13"><h3><span class="n">13</span>ઝડપી ક્વિઝ</h3>
+    <div class="score"><span>✅ સાચા: <b id="qzs">0 / ${QZ.length}</b></span></div>
+    <div class="qz">${QZ.map((q,i)=>`<div class="qq" data-q="${i}"><p>${i+1}. ${q[0]}</p><div class="ops">${q[1].map((o,j)=>`<button data-j="${j}">${"કખગઘ"[j]}. ${o}</button>`).join("")}</div><div class="why hide"></div></div>`).join("")}</div>
+  </div>`;
+  P.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{SFX.tap();const t=$(b.dataset.go);if(t)t.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});});
+  $("sScrew").addEventListener("input",e=>{const v=+e.target.value;if(v!==TH.div){TH.div=v;SFX.tick();drawScrew();}});
+  let qs=0;P.querySelectorAll(".qq").forEach(qq=>{const q=QZ[+qq.dataset.q];qq.querySelectorAll("button").forEach(b=>b.onclick=()=>{if(qq.dataset.done)return;qq.dataset.done=1;ac();const j=+b.dataset.j,ok=j===q[2];
+    b.classList.add(ok?"r":"w");qq.querySelectorAll("button")[q[2]].classList.add("r");const w=qq.querySelector(".why");w.textContent=(ok?"✅ સાચું! ":"❌ ખોટું. ")+q[3];w.classList.remove("hide");
+    if(ok){qs++;SFX.ok();vib(30);}else{SFX.bad();vib([50,40,50]);}$("qzs").textContent=qs+" / "+QZ.length;if(ok&&qs===QZ.length){SFX.win();toast("🏆 બધા સાચા! તમે ડેપ્થ માઇક્રોમીટરના માસ્ટર છો.");}});});
+  drawTheoryStatic();startSweep();
+}
+function drawTheoryStatic(){if(S.mode!=="theory"||!$("cEx1"))return;tokens();
+  const L=(id,X)=>drawLens($(id),{X,xray:false,hl:true,labels:false});
+  L("cEx1",1246);L("cEx2",783);L("cEx3",1321);L("cZ1",3);L("cZ2",-2);drawScrew();}
+function drawScrew(){const c=$("cScrew");if(!c)return;const {w,h,ctx}=fit(c);const turns=TH.div/50,pp=22,dy=turns*pp;
+  ctx.fillStyle=TK["--sunk"];ctx.fillRect(0,0,w,h);
+  const cx=w*.56,sw=Math.min(36,w*.16),nutT=h*.40,nutB=h*.58,nutW=Math.min(w*.62,150);
+  const top=h*.19+dy,tip=h*.58+dy;
+  /* spindle (screw) */
+  ctx.fillStyle=steelH(ctx,cx-sw/2,cx+sw/2);ctx.fillRect(cx-sw/2,top,sw,tip-top);
+  ctx.strokeStyle="#3A444C";ctx.lineWidth=1.2;
+  for(const s of [-1,1]){ctx.beginPath();const x0=cx+s*sw/2;for(let y=top;y<=tip;y+=1){const ph=((y-top)%pp)/pp;const z=ph<.5?ph*2:2-ph*2;ctx.lineTo(x0+s*z*5,y);}ctx.stroke();}
+  ctx.fillStyle=steelH(ctx,cx-sw/2,cx+sw/2);ctx.beginPath();ctx.ellipse(cx,tip,sw/2,4,0,0,Math.PI);ctx.fill();
+  /* nut (section, fixed) */
+  ctx.fillStyle=TK["--job"];ctx.fillRect(cx-nutW/2,nutT,nutW/2-sw/2-5,nutB-nutT);ctx.fillRect(cx+sw/2+5,nutT,nutW/2-sw/2-5,nutB-nutT);
+  ctx.save();ctx.beginPath();ctx.rect(cx-nutW/2,nutT,nutW/2-sw/2-5,nutB-nutT);ctx.rect(cx+sw/2+5,nutT,nutW/2-sw/2-5,nutB-nutT);ctx.clip();ctx.strokeStyle=TK["--hatch"];ctx.lineWidth=1;for(let i=-60;i<w+60;i+=7){ctx.beginPath();ctx.moveTo(i,nutB);ctx.lineTo(i+(nutB-nutT),nutT);ctx.stroke();}ctx.restore();
+  ctx.strokeStyle=TK["--ink"];ctx.lineWidth=1.3;ctx.strokeRect(cx-nutW/2,nutT,nutW,nutB-nutT);
+  /* thimble on top */
+  const tw2=Math.min(52,w*.2),th0=top-46;ctx.fillStyle=steelH(ctx,cx-tw2,cx+tw2);ctx.fillRect(cx-tw2,th0,2*tw2,40);ctx.strokeStyle="#4C565E";ctx.strokeRect(cx-tw2,th0,2*tw2,40);
+  for(let k=0;k<50;k+=5){let a=((k/50)-turns)*Math.PI*2;const ca=Math.cos(a);if(ca<.1)continue;const xx=cx+tw2*.95*Math.sin(a);ctx.globalAlpha=ca;ctx.strokeStyle="#13181C";ctx.lineWidth=k===0?3:1.4;ctx.beginPath();ctx.moveTo(xx,th0+40);ctx.lineTo(xx,th0+(k===0?20:28));ctx.stroke();}
+  ctx.globalAlpha=1;
+  ctx.fillStyle=TK["--th"];ctx.beginPath();ctx.moveTo(cx,th0-2);ctx.lineTo(cx-5,th0-10);ctx.lineTo(cx+5,th0-10);ctx.fill();
+  /* scale on left: start mark and movement */
+  const rx=cx-nutW/2-14,y0=h*.58;ctx.strokeStyle=TK["--muted"];ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(rx,y0);ctx.lineTo(rx,y0+4.2*pp);ctx.stroke();
+  ctx.font="700 10px 'JetBrains Mono', monospace";ctx.fillStyle=TK["--muted"];ctx.textAlign="right";ctx.textBaseline="middle";
+  for(let i=0;i<=8;i++){const yy=y0+i*pp/2;ctx.beginPath();ctx.moveTo(rx-(i%2?4:8),yy);ctx.lineTo(rx,yy);ctx.stroke();if(i%2===0)ctx.fillText((i/4).toFixed(1),rx-10,yy);}
+  ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(rx,y0);ctx.lineTo(cx-sw/2,y0);ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle=TK["--accent"];ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(rx+5,y0);ctx.lineTo(rx+5,tip);ctx.stroke();
+  ctx.fillStyle=TK["--accent"];ctx.beginPath();ctx.arc(cx,tip+3,3.5,0,7);ctx.fill();
+  ctx.font="800 11px 'Mukta Vaani', sans-serif";ctx.textAlign="left";ctx.fillStyle=TK["--ink"];
+  ctx.fillText("થીમ્બલ",cx+tw2+6,th0+20);ctx.fillText("નટ (સ્થિર)",cx+nutW/2-2>w-60?cx+sw/2+8:cx+nutW/2+6,nutT-9);ctx.fillText("સ્ક્રૂ",cx+sw/2+8,(nutB+tip)/2+6);
+  const full=Math.floor(TH.div/50),rem=TH.div%50,mv=TH.div/100;
+  const o=$("oScrew");if(o)o.innerHTML=`<div>${full} પૂરા આંટા + ${rem} કાપા</div><div class="bigout">રોડ નીચે: ${f2(mv)} mm</div><div class="note">${full} × 0.50 + ${rem} × 0.01 = ${f2(mv)} mm</div>`;}
+function startSweep(){cancelAnimationFrame(TH.anim);const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;let last=0;
+  const tick=ts=>{if(S.mode!=="theory"||!$("cSweep"))return;
+    if(!reduce&&ts-last>40){last=ts;TH.ax+=TH.dir*6;if(TH.ax>=640){TH.ax=640;TH.dir=-1;}if(TH.ax<=0){TH.ax=0;TH.dir=1;}}
+    const X=reduce?346:TH.ax;tokens();drawLens($("cSweep"),{X,xray:true,hl:true,labels:false});const p=parts(X);const o=$("oSweep");if(o)o.innerHTML=`ઢંકાયેલી છેલ્લી લાઇન: <b>${p.msr}</b>${p.half?" + અડધી":""} → વાંચન <b>${f2(X/100)} mm</b>`;
+    if(!reduce)TH.anim=requestAnimationFrame(tick);};
+  TH.anim=requestAnimationFrame(tick);}
+
+/* ---------- visit counter ---------- */
+(function(){
+  var URL="https://script.google.com/macros/s/AKfycbzq-NWMilN2-H003w-YM3MtRWFg2XIeBR0ynh68zqtlKoHac2uiY7JBilnPotXM2GAU/exec",PAGE="depth-micrometer";
+  var key="vc_"+PAGE+"_"+new Date().toDateString(),first=true;try{first=!localStorage.getItem(key);}catch(e){}
+  var shown=false;function show(t,td){t=Number(t);if(!(t>0))return false;shown=true;$("vCount").textContent=t.toLocaleString("en-IN");if(td!=null){$("vToday").textContent=Number(td).toLocaleString("en-IN");$("vTodayWrap").classList.remove("hide");}$("visits").classList.remove("hide");return true;}
+  function backup(){fetch("https://abacus.jasoncameron.dev/"+(first?"hit":"get")+"/ashish119055-sim/"+PAGE).then(function(r){return r.json();}).then(function(j){if(!shown)show(j.value,null);}).catch(function(){});}
+  try{fetch(URL+"?page="+PAGE+"&n="+(first?1:0)).then(function(r){return r.text();}).then(function(t){var d=null;try{d=JSON.parse(t);}catch(e){}if(!(d&&show(d.total,d.today)))backup();}).catch(backup).finally(function(){try{localStorage.setItem(key,"1");}catch(e){}});}catch(e){}
+})();
+
+setSnd();buildRods();renderPanel();req();
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{req();drawTheoryStatic();});
+})();
+</script>
